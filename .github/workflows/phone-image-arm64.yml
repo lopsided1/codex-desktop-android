@@ -23,12 +23,15 @@ jobs:
     timeout-minutes: 75
     env:
       PYTHONDONTWRITEBYTECODE: '1'
+      RUSTUP_HOME: ${{ github.workspace }}/work/ci/cache/rustup
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
       - name: Reclaim unused hosted SDKs, never local device storage
-        run: python3 -B tools/ci/prepare-runner-storage.py
+        run: |
+          mkdir -p work/ci/evidence/phone-cloud
+          python3 -B tools/ci/prepare-runner-storage.py 2>&1 | tee work/ci/evidence/phone-cloud/runner-storage.log
       - name: Verify native VM, source and image admission regressions
         run: |
           python3 -B tools/ci/phone-image-cloud.py preflight
