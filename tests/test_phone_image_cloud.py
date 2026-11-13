@@ -62,6 +62,22 @@ class PhoneCloudTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'one and eight'):
                 CLOUD.split_archive(root / 'empty', root / 'parts', part_bytes=13)
 
+    def test_root_owned_public_evidence_does_not_keep_private_apt_directory_modes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            metadata = root / 'metadata'
+            (metadata / 'apt/partial').mkdir(parents=True, mode=0o700)
+            (metadata / 'receipt.json').write_text('{}')
+            (metadata / 'receipt.json').chmod(0o600)
+            with patch.object(CLOUD, 'TRANSFER', root):
+                CLOUD.normalize_metadata(metadata)
+            self.assertEqual((metadata / 'apt/partial').stat().st_mode & 0o777, 0o755)
+            self.assertEqual((metadata / 'receipt.json').stat().st_mode & 0o777, 0o644)
+
+    def test_public_metadata_chmod_cannot_target_an_unrelated_directory(self):
+        with self.assertRaisesRegex(ValueError, 'Unexpected public'):
+            CLOUD.normalize_metadata(Path('/root'))
+
 
 if __name__ == '__main__':
     unittest.main()

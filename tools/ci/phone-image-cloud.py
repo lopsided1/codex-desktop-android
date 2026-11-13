@@ -218,6 +218,18 @@ def split_archive(source, directory, *, part_bytes=PART_BYTES):
     return records
 
 
+def normalize_metadata(directory):
+    # Only this newly assembled public evidence tree is made readable to the
+    # ordinary artifact uploader; never chmod source roots, homes or key stores.
+    if directory != TRANSFER / 'metadata' or directory.resolve() != directory:
+        raise ValueError('Unexpected public metadata directory')
+    directory.chmod(0o755)
+    for path in directory.rglob('*'):
+        if path.is_symlink() or not (path.is_file() or path.is_dir()):
+            raise ValueError('Public metadata may not contain aliases or special files')
+        path.chmod(0o755 if path.is_dir() else 0o644)
+
+
 def export():
     require_vm(root=True)
     release = read(IMAGE / 'assets/phone-runtime/release.json')
@@ -260,6 +272,7 @@ def export():
         'limits': ['Complete first-install input, not an APK or activated device',
                    'No APK signing compatibility, Android desktop/backend/managed-command results claimed']}
     save(metadata / 'phone-cloud.json', receipt)
+    normalize_metadata(metadata)
     save(EVIDENCE / 'export.json', {'archiveSha256': receipt['archiveSha256'], 'parts': len(parts),
          'androidExecuted': False, 'completeImageProduced': True})
     print(json.dumps({'archiveSha256': receipt['archiveSha256'], 'parts': len(parts), 'metadata': str(metadata)}), flush=True)
