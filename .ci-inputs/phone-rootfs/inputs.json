@@ -1,0 +1,197 @@
+{
+  "schema": "codex.phone-cloud-inputs.v1",
+  "gnu": {
+    "repository": "lopsided1/codex-desktop-android",
+    "runId": "43426491806",
+    "commit": "396bc531ee86ea2f2e08ddc33ff442f5bb5133c2",
+    "transferRunId": "43440222658",
+    "transferCommit": "94b3b8dd02f17e055a3fdda09b657d7207a82cc8",
+    "artifactId": 14044448020,
+    "artifactSha256": "2ceff179a55d1a35444f6e59dd089821a86d409c5260284e679093a79af9f1ef",
+    "packageSha256": "013d1f91bf7a3c91d4e55b0d72fbeadcae8360d2ad2ff3a20b7466f863608438"
+  },
+  "gpu": {
+    "sha256": "1bbf25b0b9eb2eb0d4ab5dd9f1710079f538b4cacbfce50b0fd823bf528f72cd",
+    "bytes": 10183074,
+    "parts": [
+      {
+        "path": ".ci-inputs/phone-rootfs/mesa.part-00",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "3c22fd7008161ad66bb4b4cb50d0e1bada9e5e93",
+        "bytes": 524288,
+        "sha256": "8ef73839dd6808ab8bf9167e7be328973ca3e527a232812f7987a733b4869c19"
+      },
+      {
+        "path": ".ci-inputs/phone-rootfs/mesa.part-01",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "da20da5d51ecc08d1ae6ffbf7b8f7d57fa0e6e52",
+        "bytes": 524288,
+        "sha256": "9aa5a1e1cd930b290f5bd36745682a5179ed109dcbfbce83c5060121e4165621"
+      },
+      {
+        "path": ".ci-inputs/phone-rootfs/mesa.part-02",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "3d2ad500e0af866e6fdc7da4113da0402c71059e",
+        "bytes": 524288,
+        "sha256": "14055bd684eff7b2038ee47ac8fc1177da9642c9f816d243cbcd77f9faa0d230"
+      },
+      {
+        "path": ".ci-inputs/phone-rootfs/mesa.part-03",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "a2c23d66d3ddbc6c2d790f188e3e004be3356760",
+        "bytes": 524288,
+        "sha256": "464041df6269128b3c80ef6e52ff1f2ea2ffc7ee9aaa30376080a5f34d3a4fcf"
+      },
+      {
+        "path": ".ci-inputs/phone-rootfs/mesa.part-04",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "d3cbfd928b979fc1e7b8d4e2f94eef32bfd378a7",
+        "bytes": 524288,
+        "sha256": "1ececfedd3da3386abe59a4f9d603df6abdb0e72f8cf815b74d5b05ec6c832d9"
+      },
+      {
+        "path": ".ci-inputs/phone-rootfs/mesa.part-05",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "aa500fce96d05ca833f0c714eb5366823adf2ce9",
+        "bytes": 524288,
+        "sha256": "2d4a38bfb3e36b3f8131621c0ac205fcbf6e11d78e3996d24651c8e287348785"
+      },
+      {
+        "path": ".ci-inputs/phone-rootfs/mesa.part-06",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "0bea6845778e56c6977a73a13f13391b7763cd43",
+        "bytes": 524288,
+        "sha256": "a6fd02dce0812b7eca706e4712c5894c840e39b546ca848ed842fb8a42f4689b"
+      },
+      {
+        "path": ".ci-inputs/phone-rootfs/mesa.part-07",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "84e115634fa7590aa1d788934812b2484fe3959d",
+        "bytes": 524288,
+        "sha256": "fabdf32f8b1d14121422f5cb13c7e6c08daf53995c00022199e437efe03e5546"
+      },
+      {
+        "path": ".ci-inputs/phone-rootfs/mesa.part-08",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "678f47ea548e7adb5a5358840b5dfe9d3f68b06a",
+        "bytes": 524288,
+        "sha256": "dd0df8b89d00300b2e97cb8b25ce0162aa5cbae88638ba700f78d443a1bd593e"
+      },
+      {
+        "path": ".ci-inputs/phone-rootfs/mesa.part-09",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "1a0d1c59e87d1dab3065f706351755a68ae71c95",
+        "bytes": 524288,
+        "sha256": "274ec71b84ab7d58012cb53c472913c8f28e9a6196744dedd304f3ec0590a79a"
+      },
+      {
+        "path": ".ci-inputs/phone-rootfs/mesa.part-10",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "e5c70e042852069b44550c8a85d517255e67960e",
+        "bytes": 524288,
+        "sha256": "8fc01c0b0306dfc22c5d46e7c600f7e4a05e40846cdad8dbcdc0b455ef610bff"
+      },
+      {
+        "path": ".ci-inputs/phone-rootfs/mesa.part-11",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "94d2c1945f290eb4cc914d1e914c1cd30adb335a",
+        "bytes": 524288,
+        "sha256": "c12c9b95970e144ce589923bc132d1d74c6b27fd8d283708734fa8c212a06663"
+      },
+      {
+        "path": ".ci-inputs/phone-rootfs/mesa.part-12",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "55832f69d3569dc4b10fcdb7a242b70764aa74c8",
+        "bytes": 524288,
+        "sha256": "266fcde7cc70e3ebca335b9a816cd4d29bc6bcb6eaaff6258bb410aa33f6baad"
+      },
+      {
+        "path": ".ci-inputs/phone-rootfs/mesa.part-13",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "31559669c0fd7bee1d726b08c430a664a58d3c6e",
+        "bytes": 524288,
+        "sha256": "fc58f1c8841aa3f6ad44e914db37c0f33b256daf2db0e5ce695469fa9a26319a"
+      },
+      {
+        "path": ".ci-inputs/phone-rootfs/mesa.part-14",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "279f78c2944e83344ae5ae1cb06531769b4ee6ca",
+        "bytes": 524288,
+        "sha256": "ffe97e6483b6d6f57576d2ce87274e47492eb965e0e59dda4def9e493bc3a24b"
+      },
+      {
+        "path": ".ci-inputs/phone-rootfs/mesa.part-15",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "44cd11374992c88ffc25a4158f2e4a9c2eaf2575",
+        "bytes": 524288,
+        "sha256": "15074e8da597ab7983932677c135c7eeec0ee3251bc00227a590d58f7a0fb895"
+      },
+      {
+        "path": ".ci-inputs/phone-rootfs/mesa.part-16",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "1abacf7cae53dcc2ce5f6996d488d57e423aceea",
+        "bytes": 524288,
+        "sha256": "5ec3cca644d419e59f1036a6f72a6b54b5a635e244e19006db3d844303e42a5c"
+      },
+      {
+        "path": ".ci-inputs/phone-rootfs/mesa.part-17",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "241b97335c0ef3b521d477d009951f8170415837",
+        "bytes": 524288,
+        "sha256": "3614a984fc464ee220a28e267f92602285a774693ea8e0473be891aeb46f4c46"
+      },
+      {
+        "path": ".ci-inputs/phone-rootfs/mesa.part-18",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "ca351426f21c38e35dc2500b4a6648599cd25b03",
+        "bytes": 524288,
+        "sha256": "bd7f5182e456af34abd298d6b6effd31df8163229c3a0b64add4cb413b02c47c"
+      },
+      {
+        "path": ".ci-inputs/phone-rootfs/mesa.part-19",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "8416fa6d954e4a002b1a914585f5f15ac153d1b9",
+        "bytes": 221602,
+        "sha256": "339da79fc9275c521fa7466f6a1f2f8c09ffe6505dba37311d85018fafc3681b"
+      }
+    ],
+    "scope": "Existing source-built Mesa 26.2.2 archive, reused without rebuilding; actual local build retained"
+  },
+  "client": {
+    "url": "https://persistent.oaistatic.com/codex-app-prod/linux/deb/pool/main/c/chatgpt/chatgpt_26.1103.31037_arm64.deb",
+    "descriptor": {
+      "format": "codex.official-client-input.v1",
+      "sourceUrl": "https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest/chatgpt_arm64.deb",
+      "sourceDocument": "https://learn.chatgpt.com/docs/linux/linux-app",
+      "package": "chatgpt",
+      "architecture": "arm64",
+      "version": "26.1103.31037",
+      "sha256": "4dd0a44712e0fa5821dd5fb8742f09beaef306da87ec43a9ab24142864ac8959",
+      "bytes": 537838314,
+      "maxTarBytes": 3221225472,
+      "maxMembers": 100000
+    },
+    "keyBase64": "mQINBGpypFUBEACi1Vvzq9pIpA6lj7chbqELuxJtVuzUzxrasa6ZU0yF4yhq7jf83YkJRHwbezBKeQyzJ5lkX0EhXS8aXxUhMAm3PFpAlwcInfKzmV7atJwvaxIw6RmdGYe9fBWKjTN/SmPIjtyxrTznZY97+TfD1AeGZpLaJ8fsnhrC+HkiN2TACiTocgpehFiP0OWK7mWZeTWnY2scpIYXP1Ro7nQv4KacmY4JacTQ7m/HM0Qej/3olhuEv2CwlMVWw57/oHhmTllfLDQOogFQyIVqaaR98y/Eu6cAabSfcsqAAZ2A8vfHYD27z28JvLO2PZEJd5ThlnX4Zqv0eIpZdBj//8Sl/MSqTshFZ1NDsRoqwdqw284X5MpnOJ4k4Sc2Se8tJxt/nCeibH3dJ504Fb1X/mnOqhCAQ6pVJz4RB5HRlFPSkxVPyag1v1m/7T4vie+OR4eqFQNz6mudrOoMmeVIfyL5fbe4cOr4fk/FyvEE2xMgkFatPqXn7vM9og+zremPCfwRAFpBPyX74VowFY7llcdaj/w8K5T8PzM14Hb3E4ZKizMluKmTvTq9WE1/eSQJLLQqXD5VmtmdUaC/VyE/1ZlIxcA1LWqvEQ327UXREvX/nHsrkKrl956WjzkiHFUTsD1NJ0dMfs+csOt8Furb5jZj+HsMmCm9jLdfz5b/4WKLPbvxIwARAQABtBZDb2RleCBMaW51eCBSZXBvc2l0b3J5iQJRBBMBCgA7FiEEO/oOSui4zBai2bpoSjtKVmxGYOQFAmpypFUCGwMFCwkIBwICIgIGFQoJCAsCBBYCAwECHgcCF4AACgkQSjtKVmxGYORlCQ/9FyikZo8HQcJBP9E/oXVPds/fQnIFB2qJR2z3DrfYEonNt/evSAySkPPq4/mEOjaI0pFlDDGSaps+FTcJFgoVRTasBIF7JJivvjW9ap8iWEbhhVLeIrFLbMLpUcTRntUx7R4fVMJ/1/cGn+NWZmNwS9ORorzSyCH0IAgCw1Xc3ZrjuMbFVjdToMC1TiXXCEmlYpQakmQ3Ay1cH0FHC2BBNn1MNVkJdPhpZIZCdhaMPHfYFpyopg8wFvZ5iIcvlbMgyuy8CPJVRWUcYy2dOhEOGnYJnXRPkE3E1hf8YOHNzRlduH896lT9qcEK2+fpLfrVGoc4zscLZ+Ey+Ko6iQRdVE1j67+wNR3hX8ukue574v1N/xxui575jumSE19lEj1sH4+P4gFHOtTbF0JhKKzLctbga0IAwTPKhnt3qzj1U5Yj/MZSuEVjrLhdRauOuFBXUclgyVf2w/lE85UUOdlcollsYA6Huq7xDamqf8SslZQGre3EI+lhpqJR1cOwDMUzzcl40uTyhrxXXd/bk4QSlhZbwHR25Pnt+ZMtWavlQWS0eDEV8djuXAURCmx5WOqAFB/TJe1mn5EvyWg4VFzrY/NVNOpzgY5+Xp7J28z7f637r712Eu9j4imVcdPigwS+jf/0f81i2o9b82Y26TN8+EtDLCY841MJ1lrjDrX/dno=",
+    "fingerprint": "3BFA0E4AE8B8CC16A2D9BA684A3B4A566C4660E4"
+  }
+}

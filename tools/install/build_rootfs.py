@@ -18,6 +18,7 @@ import sys
 import tarfile
 import tempfile
 import time
+import platform
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -72,14 +73,15 @@ def prepare_apt_directories(parent):
         os.chown(path, account.pw_uid, account.pw_gid)
 
 
-def bootstrap_keyring(work):
+def bootstrap_keyring(work, *, seed_keyring=None):
     """Use trusted Bookworm metadata to acquire the keyring containing Trixie keys."""
     directory = work / "keyring-bootstrap"
     directory.mkdir(mode=0o755)
+    seed = Path(seed_keyring) if seed_keyring is not None else SEED_KEYRING
     prepare_apt_directories(directory)
     (directory / "status").write_text("")
     (directory / "sources.list").write_text(
-        f"deb [signed-by={SEED_KEYRING}] {MIRROR} bookworm main\n")
+        f"deb [signed-by={seed}] {MIRROR} bookworm main\n")
     options = [
         "-o", f"Dir::Etc::sourcelist={directory / 'sources.list'}",
         "-o", "Dir::Etc::sourceparts=-",
@@ -88,7 +90,7 @@ def bootstrap_keyring(work):
         "-o", f"Dir::Cache::archives={directory / 'archives'}",
         "-o", f"Dir::Cache::pkgcache={directory / 'pkgcache.bin'}",
         "-o", f"Dir::Cache::srcpkgcache={directory / 'srcpkgcache.bin'}",
-        "-o", f"Dir::Etc::Trusted={SEED_KEYRING}", "-o", "Dir::Etc::TrustedParts=-",
+        "-o", f"Dir::Etc::Trusted={seed}", "-o", "Dir::Etc::TrustedParts=-",
         "-o", "Acquire::AllowInsecureRepositories=false",
         "-o", "APT::Get::AllowUnauthenticated=false",
     ]
@@ -111,8 +113,9 @@ def bootstrap_keyring(work):
         raise RuntimeError("Debian archive keyring missing from authenticated package")
     evidence = {
         "bootstrapRepository": MIRROR, "bootstrapSuite": "bookworm",
-        "seedKeyringSha256": digest_file(SEED_KEYRING),
-        "seedKeyringPackage": run(["dpkg-query", "-W", "-f=${Version}", "debian-archive-keyring"]),
+        "seedKeyringSha256": digest_file(seed),
+        "seedKeyringPackage": ("Explicit authenticated host input" if seed_keyring is not None else
+                               run(["dpkg-query", "-W", "-f=${Version}", "debian-archive-keyring"])),
         "package": packages[0].name, "packageSha256": expected[0],
         "keyringSha256": digest_file(keyring),
     }
@@ -219,10 +222,11 @@ def publish_directory(staging, target):
         raise OSError(code, os.strerror(code), str(target))
 
 
-def build():
+def build(*, probe_mode="mount", seed_keyring=None):
     if sys.platform != "linux" or os.geteuid() != 0:
         raise RuntimeError("Build requires host Linux root; never run this on Android")
-    if Path("/system/build.prop").exists() or not Path("/etc/os-release").is_file():
+    if ((probe_mode != "proot" and Path("/system/build.prop").exists())
+            or not Path("/etc/os-release").is_file()):
         raise RuntimeError("This is a host Linux build tool, not an Android installer")
     for program in ("mmdebstrap", "apt-get", "apt-cache", "dpkg-deb", "dpkg-query",
                     "gpgv", "arch-test", "tar", "gzip", "chroot", "python3"):
@@ -239,7 +243,7 @@ def build():
     root = work / "rootfs"
     print("Build directory: " + str(work), flush=True)
     print("Authenticating current Debian archive keyring through Bookworm", flush=True)
-    keyring = bootstrap_keyring(work)
+    keyring = bootstrap_keyring(work, seed_keyring=seed_keyring)
     hook = shlex.quote(sys.executable) + " " + shlex.quote(str(Path(__file__).resolve()))
     hook += ' customize "$1" ' + shlex.quote(str(evidence))
     command = ["mmdebstrap", "--mode=root", "--variant=apt", "--format=directory",
@@ -251,13 +255,32 @@ def build():
                SUITE, str(root),
                f"deb {MIRROR} {SUITE} main", f"deb {MIRROR} {SUITE}-updates main",
                f"deb {SECURITY} {SUITE}-security main"]
+    if probe_mode == "proot":
+        if shutil.which('proot') is None or seed_keyring is None:
+            raise RuntimeError('Explicit PRoot mode requires a native host PRoot and authenticated seed keyring')
+        command[1:1] = ['--skip=chroot/mount', '--skip=output/mknod']
     write_json(evidence / "build-command.json", command)
     print("Building and configuring pristine Debian ARM64 (host QEMU only)", flush=True)
     run(command, evidence / "mmdebstrap.log")
-    finish(work)
+    finish(work, probe_mode=probe_mode, seed_keyring=seed_keyring)
 
 
-def finish(work):
+def _archive_rootfs(root, archive):
+    with archive.open("wb") as stream:
+        tar = subprocess.Popen(["tar", "--sort=name", "--numeric-owner", "--format=posix",
+                                "--pax-option=delete=atime,delete=ctime", "-C", str(root), "-cf", "-", "."], stdout=subprocess.PIPE)
+        try:
+            gzip = subprocess.run(["gzip", "-n", "-6"], stdin=tar.stdout, stdout=stream, check=True)
+            tar.stdout.close()
+            if tar.wait() != 0:
+                raise RuntimeError("Rootfs tar failed")
+        finally:
+            if tar.poll() is None:
+                tar.terminate()
+                tar.wait()
+
+
+def finish(work, *, probe_mode="mount", seed_keyring=None):
     """Verify and package an already completed, inactive disposable build."""
     if sys.platform != "linux" or os.geteuid() != 0:
         raise RuntimeError("Finalization requires host Linux root")
@@ -295,31 +318,28 @@ def finish(work):
             path.unlink()
     validate_signatures(work, evidence, keyring)
     print("Verifying pristine rootfs and read-only ARM64 probes", flush=True)
-    verification = run([sys.executable, "-B", ROOT / "tools/install/verify_rootfs.py", root])
+    verification = run([sys.executable, "-B", ROOT / "tools/install/verify_rootfs.py", root, '--probe-mode', probe_mode])
     (evidence / "rootfs-verification.json").write_text(verification)
-    host_packages = run(["dpkg-query", "-W", "-f=${Package}\t${Version}\n",
-                         "mmdebstrap", "debootstrap", "debian-archive-keyring", "qemu-user-static", "arch-test"])
+    host_packages = ("\n".join(run([tool, '--version']).splitlines()[0]
+                              for tool in ('mmdebstrap', 'arch-test', 'apt-get')) + '\n'
+                     if probe_mode == 'proot' else
+                     run(["dpkg-query", "-W", "-f=${Package}\t${Version}\n",
+                          "mmdebstrap", "debootstrap", "debian-archive-keyring", "qemu-user-static", "arch-test"]))
     (evidence / "host-toolchain.tsv").write_text(host_packages)
-    for source in ("build_rootfs.py", "verify_rootfs.py"):
+    for source in ("build_rootfs.py", "verify_rootfs.py", "proot_archive.py"):
         shutil.copy2(ROOT / "tools/install" / source, evidence / source)
-    shutil.copy2(SEED_KEYRING, evidence / "seed-debian-archive-keyring.gpg")
+    shutil.copy2(Path(seed_keyring) if seed_keyring is not None else SEED_KEYRING,
+                 evidence / "seed-debian-archive-keyring.gpg")
     shutil.copy2(keyring, evidence / "bootstrap-debian-archive-keyring.gpg")
     shutil.copytree(work / "keyring-bootstrap", evidence / "keyring-bootstrap", dirs_exist_ok=True,
-                    ignore=shutil.ignore_patterns("pkgcache.bin", "srcpkgcache.bin", "extracted", "partial", "lock"))
+                    ignore=shutil.ignore_patterns("pkgcache.bin", "srcpkgcache.bin", "extracted", "partial", "lock", ".l2s.*"))
     archive = work / "debian-13-arm64-rootfs.tar.gz"
     print("Archiving verified rootfs and preserving package provenance", flush=True)
-    with archive.open("wb") as stream:
-        tar = subprocess.Popen(["tar", "--sort=name", "--numeric-owner", "--format=posix",
-                                "--pax-option=delete=atime,delete=ctime", "-C", str(root), "-cf", "-", "."], stdout=subprocess.PIPE)
-        try:
-            gzip = subprocess.run(["gzip", "-n", "-6"], stdin=tar.stdout, stdout=stream, check=True)
-            tar.stdout.close()
-            if tar.wait() != 0:
-                raise RuntimeError("Rootfs tar failed")
-        finally:
-            if tar.poll() is None:
-                tar.terminate()
-                tar.wait()
+    if probe_mode == "proot":
+        from proot_archive import write_archive
+        write_archive(root, archive, evidence / "proot-export.json")
+    else:
+        _archive_rootfs(root, archive)
     archive_digest = digest_file(archive)
     records = json.loads((evidence / "downloaded-packages.json").read_text())
     manifest = {"schemaVersion": 1, "kind": "pristine-debian-base", "suite": SUITE,
@@ -329,7 +349,11 @@ def finish(work):
                 "openaiClientIncluded": False, "accountProfileIncluded": False,
                 "keyringInitialized": False, "compatibilityShimIncluded": False,
                 "codexGpuCandidateIncluded": False, "androidTested": False,
-                "buildOnlyEmulation": "QEMU aarch64 user-mode through host binfmt; no QEMU in rootfs",
+                "buildOnlyEmulation": ("Native GNU ARM64 under host PRoot; no emulator in rootfs"
+                                       if probe_mode == 'proot' else
+                                       "Native GNU ARM64 chroot/mount probes; no emulation in rootfs"
+                                       if platform.machine().lower() in ('aarch64', 'arm64') else
+                                       "QEMU aarch64 user-mode through host binfmt; no QEMU in rootfs"),
                 "verification": json.loads(verification),
                 "limits": ["Not an APK or activated Android rootfs", "No release signing/authenticated update channel yet",
                            "Android activation must provision DNS, guest identity and a new keyring",
@@ -363,6 +387,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("operation", choices=("build", "customize", "finalize"))
     parser.add_argument("paths", nargs="*")
+    parser.add_argument("--probe-mode", choices=("mount", "proot"), default="mount")
+    parser.add_argument("--seed-keyring", type=Path)
     args = parser.parse_args()
     if args.operation == "customize":
         if len(args.paths) != 2:
@@ -371,8 +397,8 @@ if __name__ == "__main__":
     elif args.operation == "finalize":
         if len(args.paths) != 1:
             parser.error("finalize requires one completed disposable BUILD directory")
-        finish(Path(args.paths[0]))
+        finish(Path(args.paths[0]), probe_mode=args.probe_mode, seed_keyring=args.seed_keyring)
     else:
         if args.paths:
             parser.error("build does not take paths")
-        build()
+        build(probe_mode=args.probe_mode, seed_keyring=args.seed_keyring)

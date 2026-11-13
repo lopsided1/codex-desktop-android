@@ -237,7 +237,30 @@ os.execve(chroot,[chroot,root,*command],environment)
 """
 
 
-def probe(root, command):
+def probe(root, command, *, mode="mount"):
+    if mode == "proot":
+        executable = shutil.which("proot")
+        if not executable:
+            raise VerificationError("An explicit native host PRoot is required")
+        environment = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "LC_ALL": "C",
+                       "LANG": "C", "HOME": "/nonexistent", "XDG_CACHE_HOME": "/nonexistent",
+                       "PYTHONDONTWRITEBYTECODE": "1", "PROOT_NO_SECCOMP": "1"}
+        host_environment = dict(environment)
+        for name in ('LD_LIBRARY_PATH', 'ANDROID_ROOT', 'ANDROID_DATA', 'PROOT_TMP_DIR'):
+            if name in os.environ:
+                host_environment[name] = os.environ[name]
+        # Host PRoot needs its own Android linker environment. Clear it inside
+        # the GNU guest before running a probe; bind only the real /dev/null.
+        result = subprocess.run([executable, '-0', '-r', str(root), '-b', '/dev/null:/dev/null',
+                                 '-w', '/', '/usr/bin/env', '-i',
+                                 *[name + '=' + value for name, value in environment.items()], *command],
+                                capture_output=True, text=True, timeout=PROBE_TIMEOUT, env=host_environment)
+        if result.returncode:
+            raise VerificationError("Native PRoot guest probe failed: " + command[0]
+                                    + " (exit " + str(result.returncode) + ")")
+        return result.stdout
+    if mode != "mount":
+        raise VerificationError("Unknown guest probe mode")
     executables = {name: shutil.which(name) for name in ("unshare", "mount", "chroot")}
     if not all(executables.values()):
         raise VerificationError("Host unshare, mount and chroot are required for read-only probes")
@@ -285,13 +308,36 @@ def verify_no_mounts(root):
             raise VerificationError("Guest must be inactive and contain no host mounts")
 
 
-def verify(root):
+def tree_fingerprint(root):
+    """Observe all inactive guest bytes/links/modes without following aliases."""
+    digest = hashlib.sha256()
+    for base, directories, files in os.walk(root, followlinks=False):
+        directories.sort()
+        for name in sorted(directories + files):
+            path = Path(base) / name
+            info = path.lstat()
+            digest.update(path.relative_to(root).as_posix().encode() + b"\0")
+            digest.update(str(info.st_mode).encode() + b"\0")
+            if stat.S_ISLNK(info.st_mode):
+                digest.update(os.fsencode(os.readlink(path)))
+            elif stat.S_ISREG(info.st_mode):
+                with path.open("rb") as stream:
+                    digest.update(hashlib.file_digest(stream, "sha256").digest())
+            elif not stat.S_ISDIR(info.st_mode):
+                raise VerificationError("Special object in inactive guest fingerprint")
+    return digest.hexdigest()
+
+
+def verify(root, *, probe_mode="mount"):
     if sys.platform != "linux" or os.geteuid() != 0:
         raise VerificationError("Rootfs verification requires host Linux root for read-only mount/chroot probes")
     root = Path(root).resolve(strict=True)
     if root == Path("/") or not root.is_dir():
         raise VerificationError("Expected a separate inactive guest root directory")
     verify_no_mounts(root)
+    before = tree_fingerprint(root) if probe_mode == "proot" else None
+    def run_probe(command):
+        return probe(root, command, mode="proot") if probe_mode == "proot" else probe(root, command)
     release = {}
     for line in read_guest(root, "etc/os-release").decode().splitlines():
         if "=" in line:
@@ -336,40 +382,47 @@ def verify(root):
             nonempty_sources.append(source.relative_to(root).as_posix())
     if not nonempty_sources:
         raise VerificationError("Guest APT source configuration is missing")
-    if probe(root, ["/usr/bin/dpkg", "--audit"]).strip():
+    if run_probe(["/usr/bin/dpkg", "--audit"]).strip():
         raise VerificationError("dpkg --audit reports unfinished package state")
-    packages = package_inventory(probe(root, ["/usr/bin/dpkg-query", "-W",
+    packages = package_inventory(run_probe(["/usr/bin/dpkg-query", "-W",
         "-f=${Package}\t${Version}\t${Architecture}\t${Status}\n"]))
     for package in packages:
         name = "usr/share/doc/" + package["name"] + "/copyright"
         if not read_guest(root, name):
             raise VerificationError("Installed package copyright notice is empty")
-    probe(root, ["/usr/bin/python3", "-B", "-c", "import websockets, secretstorage"])
-    git_version = probe(root, ["/usr/bin/git", "--version"]).strip()
+    run_probe(["/usr/bin/python3", "-B", "-c", "import websockets, secretstorage"])
+    git_version = run_probe(["/usr/bin/git", "--version"]).strip()
     if not re.fullmatch(r"git version [0-9][^\n]*", git_version):
         raise VerificationError("Guest Git version check failed")
-    fonts = probe(root, ["/usr/bin/fc-list", "--format", "%{file}\n"]).splitlines()
+    fonts = run_probe(["/usr/bin/fc-list", "--format", "%{file}\n"]).splitlines()
     if not fonts:
         raise VerificationError("Guest fontconfig found no fonts")
     for name in fonts:
         font = guest_path(root, name)
         if not font.is_file() or not str(name).startswith("/usr/share/fonts/"):
             raise VerificationError("Fontconfig reported a font outside the distribution font tree")
+    if before is not None and tree_fingerprint(root) != before:
+        raise VerificationError("PRoot host probes changed the inactive guest")
+    verify_no_mounts(root)
     return {"schemaVersion": 1, "kind": "pristine-debian-rootfs-validation", "debianVersion": "13",
             "architecture": "arm64", "packages": packages, "packageCount": len(packages),
             "tree": tree, "accounts": accounts, "elf": elfs, "fontCount": len(set(fonts)),
             "gitVersion": git_version, "xkbReadableOutsideGuest": True,
-            "probes": {"dpkgAudit": "pass", "pythonImports": "pass", "mountReadOnly": True},
+            "probes": {"dpkgAudit": "pass", "pythonImports": "pass", "mountReadOnly": probe_mode == "mount",
+                       "mode": probe_mode, "contentUnchanged": before is not None},
             "guestEmulatorPresent": False, "openAIClientPresent": False, "shimPresent": False,
             "scope": "Host checks only; package authentication belongs to build provenance. "
-                     "Host binfmt/QEMU may run probes; Android runtime has not been tested."}
+                     "Host probes do not test the Android application runtime. "
+                     + ("PRoot probes use before/after content verification, not a read-only mount."
+                        if probe_mode == "proot" else "Host binfmt/QEMU may run read-only mount probes.")}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("root", type=Path)
+    parser.add_argument("--probe-mode", choices=("mount", "proot"), default="mount")
     args = parser.parse_args()
-    print(json.dumps(verify(args.root), indent=2, sort_keys=True))
+    print(json.dumps(verify(args.root, probe_mode=args.probe_mode), indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

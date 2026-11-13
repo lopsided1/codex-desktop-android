@@ -94,7 +94,7 @@ def inspect_archive(path, expected_sha256):
             "payloadBytes": payload, "maxTarBytes": tar_bytes, "members": len(names)}
 
 
-def inventory(root):
+def inventory(root, *, ignore_proot_metadata=False):
     """Immutable launch inputs; account, DNS and keyring are provisioned on Android."""
     root = Path(root)
     selected = set(REQUIRED)
@@ -103,6 +103,8 @@ def inventory(root):
         selected.update(p.relative_to(root).as_posix() for p in (root / name).rglob("*"))
     records = []
     for name in sorted(selected):
+        if ignore_proot_metadata and any(p.startswith(".l2s.") for p in PurePosixPath(name).parts):
+            continue
         path_name(name)
         path = root / name
         info = path.lstat()
