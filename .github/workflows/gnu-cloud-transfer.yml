@@ -67,6 +67,9 @@ jobs:
               assert sha(path) == indexed[name]['sha256'] and path.stat().st_size == indexed[name]['bytes']
               shutil.copyfile(path, destination / name)
           assert sha(destination / 'codex-gnu-engine-aarch64.tar.gz') == expected
+          symbols = source / 'codex-gnu-engine-aarch64-symbols.tar.gz'
+          assert sha(symbols) == indexed[symbols.name]['sha256']
+          assert symbols.stat().st_size == indexed[symbols.name]['bytes']
           shutil.copyfile(source / 'cloud-build.json', destination / 'cloud-build.json')
           evidence = destination / 'original-evidence'
           evidence.mkdir()
@@ -100,3 +103,11 @@ jobs:
           if-no-files-found: error
           retention-days: 7
           compression-level: 1
+      - name: Retain debug symbols as a separate downloadable artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gnu-symbols-43426491806
+          path: original/work/ci/gnu/output/codex-gnu-engine-aarch64-symbols.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
