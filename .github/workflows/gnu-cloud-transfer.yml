@@ -1,0 +1,102 @@
+name: Transfer completed GNU build (no recompilation)
+
+on:
+  push:
+    branches: ['build/gnu-transfer-*']
+    paths: ['.github/workflows/gnu-cloud-transfer.yml']
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  transfer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Verify original successful run identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir -p admission
+          gh api "repos/$GH_REPO/actions/runs/43426491806" > admission/run.json
+          gh api "repos/$GH_REPO/actions/artifacts/14044751168" > admission/artifact.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          run = json.loads(Path('admission/run.json').read_bytes())
+          artifact = json.loads(Path('admission/artifact.json').read_bytes())
+          assert run['status'] == 'completed' and run['conclusion'] == 'success'
+          assert run['head_sha'] == '396bc531ee86ea2f2e08ddc33ff442f5bb5133c2'
+          assert run['repository']['full_name'] == 'lopsided1/codex-desktop-android'
+          assert artifact['workflow_run']['id'] == run['id']
+          assert artifact['digest'] == 'sha256:35123d196bc1d872c2dc96f157baf74bffe451c5bca42f702d53dd67c23201cf'
+          assert not artifact['expired']
+          PY
+      - name: Retrieve original artifact without rebuilding
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: gnu-engine-arm64-43426491806-1
+          path: original
+          github-token: ${{ github.token }}
+          run-id: 43426491806
+      - name: Verify and retain portable runtime with original receipts
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, shutil
+          from pathlib import Path
+          def sha(path):
+              with path.open('rb') as stream:
+                  return hashlib.file_digest(stream, 'sha256').hexdigest()
+          source = Path('original/work/ci/gnu/output')
+          state = json.loads((source / 'original-cloud-build-state.json').read_bytes())
+          cloud = json.loads((source / 'cloud-build.json').read_bytes())
+          expected = '013d1f91bf7a3c91d4e55b0d72fbeadcae8360d2ad2ff3a20b7466f863608438'
+          assert state['buildCompleted'] and state['packageCompleted'] and state['buildExitCode'] == 0
+          assert state['packageSha256'] == expected
+          assert cloud['commit'] == '396bc531ee86ea2f2e08ddc33ff442f5bb5133c2'
+          assert cloud['runId'] == '43426491806'
+          indexed = {item['path']: item for item in cloud['files']}
+          destination = Path('portable-gnu')
+          destination.mkdir()
+          for name in ('codex-gnu-engine-aarch64.tar.gz', 'SHA256SUMS',
+                       'original-cloud-build-state.json', 'engine-Cargo.toml'):
+              path = source / name
+              assert not path.is_symlink() and path.is_file()
+              assert sha(path) == indexed[name]['sha256'] and path.stat().st_size == indexed[name]['bytes']
+              shutil.copyfile(path, destination / name)
+          assert sha(destination / 'codex-gnu-engine-aarch64.tar.gz') == expected
+          shutil.copyfile(source / 'cloud-build.json', destination / 'cloud-build.json')
+          evidence = destination / 'original-evidence'
+          evidence.mkdir()
+          roots = (Path('original/downloads/engine-gnu-arm64'), Path('original/work/ci/evidence/gnu-cloud'))
+          for root in roots:
+              for path in sorted(root.rglob('*')):
+                  if path.is_symlink():
+                      raise ValueError('Unexpected evidence link')
+                  if path.is_file() and path.suffix in ('.json', '.log', '.txt', '.toml', '.patch'):
+                      target = evidence / root.name / path.relative_to(root)
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      shutil.copyfile(path, target)
+          shutil.copytree('admission', destination / 'github-admission')
+          files = [{'path': path.relative_to(destination).as_posix(), 'bytes': path.stat().st_size,
+                    'sha256': sha(path)} for path in sorted(destination.rglob('*')) if path.is_file()]
+          assert sum(item['bytes'] for item in files) < 500 * 1024 ** 2
+          receipt = {'schema': 'codex.gnu-cloud-transfer.v1', 'originalRunId': '43426491806',
+                     'originalArtifactId': 14044751168, 'originalArtifactDigest':
+                     'sha256:35123d196bc1d872c2dc96f157baf74bffe451c5bca42f702d53dd67c23201cf',
+                     'packageSha256': expected, 'files': files,
+                     'scope': 'Verified GNU runtime and receipts only; no rebuild, APK or phone image',
+                     'symbols': 'Preserved in original build artifact, not duplicated here'}
+          (destination / 'cloud-transfer.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          print(json.dumps({'runtimeBytes': sum(item['bytes'] for item in files), 'packageSha256': expected}))
+          PY
+      - name: Upload runtime below connector download limit
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gnu-runtime-43426491806
+          path: portable-gnu
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 1
