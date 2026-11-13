@@ -43,6 +43,41 @@ def save(path: Path, value) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
 
 
+def apply_recovery_patch(source: Path, patch: Path) -> None:
+    """Apply in an isolated worktree, then check every full-index result blob.
+
+    A checkout nested beneath another repository can otherwise silently skip
+    every patch path. Bind aliases also make GIT_CEILING_DIRECTORIES unreliable.
+    The temporary Git metadata belongs only to this build, never the live index.
+    """
+    source, patch = source.resolve(strict=True), patch.resolve(strict=True)
+    with tempfile.TemporaryDirectory(prefix=".patch-git-", dir=source.parent) as temporary:
+        subprocess.run(["git", "init", "--bare", "-q", temporary], check=True)
+        env = dict(os.environ)
+        for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX"):
+            env.pop(name, None)
+        git = ["git", "--git-dir=" + temporary, "--work-tree=" + str(source)]
+        for flags in (["--check"], [], ["--reverse", "--check"]):
+            subprocess.run([*git, "apply", *flags, str(patch)], cwd=source, env=env, check=True)
+        text = patch.read_text(encoding="utf-8")
+        rows = re.findall(r"(?m)^diff --git a/([^\n]+) b/([^\n]+)\n(.*?)(?=^diff --git |\Z)", text, re.S)
+        if not rows:
+            raise RuntimeError("Recovery patch contains no file changes")
+        for old, new, body in rows:
+            identity = re.search(r"(?m)^index [0-9a-f]{40}\.\.([0-9a-f]{40})(?: |$)", body)
+            if identity is None:
+                raise RuntimeError("Recovery patch must retain full-index blob identities: " + new)
+            relative = Path(new)
+            if relative.is_absolute() or ".." in relative.parts or old != new:
+                raise RuntimeError("Unsupported recovery patch path: " + new)
+            path = source / relative
+            if identity[1] == "0" * 40:
+                if path.exists() or path.is_symlink():
+                    raise RuntimeError("Recovery deletion did not apply: " + new)
+            elif run([*git, "hash-object", "--no-filters", path], cwd=source, env=env) != identity[1]:
+                raise RuntimeError("Recovery patch result blob differs: " + new)
+
+
 def run(argv, **kwargs) -> str:
     return subprocess.check_output(list(map(str, argv)), text=True, **kwargs).strip()
 
@@ -236,13 +271,7 @@ def prepare(args) -> None:
     # A source snapshot deliberately has no Git index and never modifies the
     # live worktree's index. Apply exactly the full-index binary recovery patch.
     shutil.copyfile(patch, evidence / "engine.patch")
-    # A snapshot under this project's work/ directory has no Git repository of
-    # its own. Stop parent discovery so git apply uses the snapshot, rather
-    # than interpreting paths relative to Codex's enclosing checkout.
-    patch_environment = dict(os.environ, GIT_CEILING_DIRECTORIES=str(source.parent))
-    for options in (["--check"], []):
-        subprocess.run(["git", "apply", *options, str(evidence / "engine.patch")],
-                       cwd=source, env=patch_environment, check=True)
+    apply_recovery_patch(source, evidence / "engine.patch")
     save(evidence / "recovery-manifest.json", manifest)
     save(evidence / "SOURCES.json", files(source))
     canonical_source = source

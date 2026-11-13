@@ -1,0 +1,116 @@
+name: GNU engine ARM64
+
+on:
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: Cargo build jobs (1 for reduced peak RAM)
+        type: choice
+        options: ['2', '1']
+        default: '2'
+  push:
+    branches: ['build/gnu-arm64-*']
+    paths:
+      - '.github/workflows/gnu-engine-arm64.yml'
+      - 'tools/ci/gnu-engine-cloud.py'
+      - 'tools/executor/build-gnu-engine.py'
+      - 'recovery/engine/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gnu-arm64-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
+    env:
+      CARGO_HOME: ${{ github.workspace }}/work/ci/cache/cargo
+      RUSTUP_HOME: ${{ github.workspace }}/work/ci/cache/rustup
+      CARGO_INCREMENTAL: '0'
+      CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+      CARGO_BUILD_JOBS: ${{ inputs.jobs || '2' }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Reclaim unused hosted-VM SDKs (never local/device storage)
+        run: python3 -B tools/ci/prepare-runner-storage.py
+      - name: Verify native VM resources before compiling
+        run: python3 -B tools/ci/gnu-engine-cloud.py preflight
+      - name: Check public source and cloud/recovery admission regressions
+        run: |
+          python3 -B tools/ci/check-source-integrity.py
+          python3 -B -m unittest discover -s tests -p test_gnu_engine_cloud.py -v
+          python3 -B -m unittest discover -s tests -p test_gnu_engine_recovery.py -v
+      - name: Restore verified-download cache
+        id: downloads
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            work/ci/cache/cargo
+            work/ci/cache/rustup
+            work/ci/cache/gnu-inputs
+            downloads/engine-v8
+          key: gnu-inputs-${{ runner.os }}-${{ runner.arch }}-rust195-${{ hashFiles('recovery/engine/manifest.json') }}
+          restore-keys: gnu-inputs-${{ runner.os }}-${{ runner.arch }}-rust195-
+      - name: Restore exact native build cache
+        id: target
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: work/ci/cache/gnu-arm64-target
+          key: gnu-target-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('recovery/engine/manifest.json', 'recovery/engine/engine.patch', 'tools/executor/build-gnu-engine.py', 'tools/ci/gnu-engine-cloud.py') }}
+      - name: Install Linux and pinned Rust prerequisites
+        run: |
+          mkdir -p "$CARGO_HOME" "$RUSTUP_HOME"
+          bash tools/ci/setup-linux.sh arm64-build
+          sudo apt-get install -y --no-install-recommends mmdebstrap arch-test debian-archive-keyring
+      - name: Recover exact sources and prepare GNU OpenSSL/V8
+        run: python3 -B tools/ci/gnu-engine-cloud.py prepare
+      - name: Build locked GNU CLI and Code Mode host
+        run: python3 -B tools/ci/gnu-engine-cloud.py build --jobs "$CARGO_BUILD_JOBS"
+      - name: Build authenticated minimal Debian 13 library baseline
+        run: |
+          sudo --preserve-env=GITHUB_ACTIONS,GITHUB_WORKSPACE,RUNNER_ENVIRONMENT,GITHUB_REPOSITORY,GITHUB_SHA,GITHUB_RUN_ID \
+            python3 -B tools/ci/gnu-engine-cloud.py debian-runtime
+      - name: Check ELF closure, retain symbols and stage matched APK assets
+        run: python3 -B tools/ci/gnu-engine-cloud.py package
+      - name: Save download cache even after a failed compilation
+        if: always() && steps.downloads.outcome == 'success' && steps.downloads.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            work/ci/cache/cargo
+            work/ci/cache/rustup
+            work/ci/cache/gnu-inputs
+            downloads/engine-v8
+          key: ${{ steps.downloads.outputs.cache-primary-key }}
+      - name: Preserve partial Cargo work after a failed build
+        if: always() && steps.target.outcome == 'success' && steps.target.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: work/ci/cache/gnu-arm64-target
+          key: ${{ steps.target.outputs.cache-primary-key }}
+      - name: Record final memory and disk diagnostics
+        if: always()
+        run: |
+          mkdir -p work/ci/evidence/gnu-cloud
+          free -h > work/ci/evidence/gnu-cloud/final-memory.txt
+          df -h > work/ci/evidence/gnu-cloud/final-disk.txt
+          sudo dmesg --ctime | tail -n 100 > work/ci/evidence/gnu-cloud/kernel-tail.txt || true
+      - name: Upload artifacts and failure evidence (no homes/caches/keys)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gnu-engine-arm64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            work/ci/gnu/output
+            work/ci/evidence/gnu-cloud
+            downloads/engine-gnu-arm64
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 1
