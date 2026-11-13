@@ -149,8 +149,19 @@ def prepare():
     if not package.exists():
         partial = package.with_suffix('.partial')
         print('Downloading exact official client input; credentials are not used', flush=True)
-        with urllib.request.urlopen(client['url'], timeout=180) as response, partial.open('xb') as output:
-            shutil.copyfileobj(response, output)
+        request = urllib.request.Request(client['url'], headers={'User-Agent': 'Mozilla/5.0',
+                                        'Accept': 'application/vnd.debian.binary-package, application/octet-stream, */*'})
+        downloaded, heartbeat = 0, time.monotonic()
+        with urllib.request.urlopen(request, timeout=180) as response, partial.open('xb') as output:
+            while block := response.read(1024 * 1024):
+                downloaded += len(block)
+                if downloaded > descriptor['bytes']:
+                    raise ValueError('Official client exceeds pinned download size')
+                output.write(block)
+                if time.monotonic() - heartbeat >= 30:
+                    print(json.dumps({'heartbeat': 'official-client-download', 'bytes': downloaded,
+                                      'expectedBytes': descriptor['bytes']}), flush=True)
+                    heartbeat = time.monotonic()
         if sha(partial) != descriptor['sha256'] or partial.stat().st_size != descriptor['bytes']:
             raise ValueError('Official client download differs from exact authenticated input')
         partial.rename(package)

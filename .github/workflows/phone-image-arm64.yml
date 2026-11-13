@@ -50,7 +50,7 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: work/ci/cache/phone-inputs
-          key: phone-official-arm64-26.1103.31037-4dd0a44712e0fa58
+          key: phone-official-arm64-26.1103.31037-4dd0a44712e0fa58-verified-v2
       - name: Fetch already-built GNU artifact without recompiling
         env:
           GH_TOKEN: ${{ github.token }}
@@ -73,7 +73,7 @@ jobs:
           sudo --preserve-env=GITHUB_ACTIONS,GITHUB_WORKSPACE,RUNNER_ENVIRONMENT,GITHUB_REPOSITORY,GITHUB_SHA,GITHUB_RUN_ID \
             python3 -B tools/ci/phone-image-cloud.py export
       - name: Preserve verified downloads for retry, never trust cache without checks
-        if: always() && steps.client.outcome == 'success' && steps.client.outputs.cache-hit != 'true'
+        if: always() && steps.client.outcome == 'success' && steps.client.outputs.cache-hit != 'true' && hashFiles('work/ci/evidence/phone-cloud/prepared-inputs.json') != ''
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
